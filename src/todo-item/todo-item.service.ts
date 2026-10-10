@@ -66,7 +66,15 @@ export class TodoItemService {
 
   /* Delete */
   deleteTodoItem(id: string): ServerResponse {
+    const idx: number = this.items.findIndex(i => i.id === id);
+    const status: number = idx !== -1 ? 200 : 404;
+    const message: string = status === 200 ? "Item eliminado exitosamente!" : "No se encontro el item...";
 
+    if (idx !== -1) {
+      this.items.splice(idx, 1);
+    }
+
+    return { data: this.items, status, message };
   }
 
 

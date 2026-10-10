@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
-import type { TodoItemService, ServerResponse } from './todo-item.service.js';
+import { TodoItemService } from './todo-item.service.js';
+import type { ServerResponse } from './todo-item.service.js';
 import { TodoItemDTO } from './dto/create-todo-item.dto.js';
 import { UpdateTodoItemDTO } from './dto/update-todo-item.dto.js';
 
@@ -25,7 +26,7 @@ export class TodoItemController {
     return this.todoItemsService.updateTodoItem(todoItemDTO);
   }
 
-  @Delete('id')
+  @Delete(':id')
   deleteTodoItem(@Param('id') id: string): ServerResponse {
     return this.todoItemsService.deleteTodoItem(id);
   }
