@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateConversationDTO } from './dto/create-conversation.dto.js';
 import { CreateMessageDTO } from './dto/create-message.dto.js';
-import { resourceLimits } from 'node:worker_threads';
 export interface Conversation {
   id: string;
   userId: string;
