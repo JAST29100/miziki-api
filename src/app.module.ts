@@ -5,9 +5,10 @@ import { MessageModule } from './message/message.module.js';
 import { UserModule } from './users/users.module.js';
 import { CancionModule } from './canciones/canciones.module.js';
 import { NotificationModule } from './notifications/notifications.module.js';
+import { MatchModule } from './matches/matches.module.js';
 
 @Module({
-  imports: [UserModule, MessageModule, CancionModule, NotificationModule],
+  imports: [UserModule, MessageModule, CancionModule, NotificationModule, MatchModule],
   controllers: [AppController],
   providers: [AppService],
 })
