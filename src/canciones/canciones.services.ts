@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CancionDTO } from './dto/create-cancion.dto.js';
 import { UpdateCancionDTO } from './dto/update-cancion.dto.js';
 
+//Moldes
 export interface Cancion { //Estructura de cada cancion.
   id: string;
   titulo: string;
