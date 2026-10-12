@@ -6,6 +6,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  creadoEn?: string;
   seguidores: Array<string>;
   seguidos: Array<string>;
 }
@@ -24,7 +25,14 @@ export class UserService {
 
   /* Create */
   createUser(userDTO: UserDTO): ServerResponse {
-    this.users.push({id: String(this.newId++), ...userDTO});
+    this.users.push({
+      id: String(this.newId++),
+      username: userDTO.username,
+      email: userDTO.email,
+      creadoEn: userDTO.creadoEn,
+      seguidores: [],
+      seguidos: [],
+    });
 
     return { data: this.users, status: 201, message: "Perfil creado!" };
   }
@@ -74,7 +82,13 @@ export class UserService {
     const idx: number = this.users.findIndex(i => (i.id === userId));
 
     if (idx !== -1) {
-      this.users[idx] = { ...this.users[idx], ...updateUserDTO };
+      this.users[idx] = {
+        ...this.users[idx],
+        username: updateUserDTO.username ?? this.users[idx].username,
+        email: updateUserDTO.email ?? this.users[idx].email,
+        creadoEn: updateUserDTO.creadoEn ?? this.users[idx].creadoEn,
+        id: this.users[idx].id,
+      };
     }
 
     const status: number = idx !== -1 ? 200 : 404;
