@@ -24,7 +24,7 @@ export class MessageService {
   createConversation(dto: CreateConversationDTO): Conversation{
     const conversation: Conversation = {
       id: `${this.conversations.length + 1}`,
-      userId: '1',
+      userId: dto.currentUserId ?? '1',
       otherUserId: dto.userId,
     };
     this.conversations.push(conversation);
