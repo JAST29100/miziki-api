@@ -6,7 +6,6 @@ import { UpdatePostDTO } from './dto/update-post-item.dto.js';
 export interface Post {
   id: string;
   userId: string;
-  numberId: string;
   contenido: string;
   fecha: string;
 }
@@ -31,7 +30,6 @@ export class PostsService {
     const post: Post = {
       id: String(this.newId++),
       userId: postDTO.userId,
-      numberId: postDTO.numberId,
       contenido: postDTO.contenido,
       fecha: postDTO.fecha,
     };
@@ -55,7 +53,6 @@ export class PostsService {
     if (idx !== -1) {
       this.posts[idx] = {
         ...this.posts[idx],
-        numberId: updatePostDTO.numberId ?? this.posts[idx].numberId,
         contenido: updatePostDTO.contenido ?? this.posts[idx].contenido,
         fecha: updatePostDTO.fecha ?? this.posts[idx].fecha,
         id: this.posts[idx].id,

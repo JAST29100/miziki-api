@@ -31,4 +31,14 @@ export class UserController {
   deleteUser(@Param('userId') userId: string): ServerResponse {
     return this.userService.deleteUser(userId);
   }
+
+  @Post(':followerId/follow/:followedId')
+  followUser(@Param('followerId') followerId: string, @Param('followedId') followedId: string): ServerResponse {
+    return this.userService.followUser(followerId, followedId);
+  }
+
+  @Delete(':followerId/follow/:followedId')
+  unfollowUser(@Param('followerId') followerId: string, @Param('followedId') followedId: string): ServerResponse {
+    return this.userService.unfollowUser(followerId, followedId);
+  }
 }
