@@ -6,31 +6,31 @@ import { UpdateCancionDTO } from './dto/update-cancion.dto.js';
 
 @Controller('songs') // /songs/id
 export class CancionController {
-        
+
     constructor(private readonly cancionService: CancionService) { }
 
     @Get() // GET /songs
-    getCanciones(): ServerResponse {
+    getCanciones(): Promise<ServerResponse> {
         return this.cancionService.getCanciones();
     }
 
     @Post() // POST /songs, el body va directo: { "titulo": "...", "artista": "...", "duracion": 200 }
-    createCancion(@Body() cancionDTO: CancionDTO): ServerResponse {
+    createCancion(@Body() cancionDTO: CancionDTO): Promise<ServerResponse> {
         return this.cancionService.createCancion(cancionDTO);
     }
 
-    @Get(':songId') // GET /songs/1
-    getCancion(@Param('songId') songId: string): ServerResponse {
+    @Get(':songId') // GET /songs/abc123...
+    getCancion(@Param('songId') songId: string): Promise<ServerResponse> {
         return this.cancionService.getCancion(songId);
     }
 
-    @Patch(':songId') // PATCH /songs/1, cambia solo los campos que manden
-    updateParteCancion(@Param('songId') songId: string, @Body() updateCancionDTO: UpdateCancionDTO): ServerResponse {
+    @Patch(':songId') // PATCH /songs/abc123..., cambia solo los campos que manden
+    updateParteCancion(@Param('songId') songId: string, @Body() updateCancionDTO: UpdateCancionDTO): Promise<ServerResponse> {
         return this.cancionService.updateParteCancion(songId, updateCancionDTO);
     }
 
-    @Delete(':songId') // DELETE /songs/1
-    deleteCancion(@Param('songId') songId: string): ServerResponse {
+    @Delete(':songId') // DELETE /songs/abc123...
+    deleteCancion(@Param('songId') songId: string): Promise<ServerResponse> {
         return this.cancionService.deleteCancion(songId);
     }
-}  
+}

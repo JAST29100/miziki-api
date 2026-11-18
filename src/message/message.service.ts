@@ -1,4 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import type { Model } from 'mongoose';
+import { Conversacion, Mensaje } from './message.schema.js';
+import type { ConversacionDocument, MensajeDocument } from './message.schema.js';
 import { CreateConversationDTO } from './dto/create-conversation.dto.js';
 import { CreateMessageDTO } from './dto/create-message.dto.js';
 
@@ -16,54 +20,84 @@ export interface Message {
 
 @Injectable()
 export class MessageService {
-  private conversations: Array<Conversation> = [];
-  private messages: Array<Message> = [];
-  getConversations(): Array<Conversation> {
-    return this.conversations;
+  constructor(
+    @InjectModel(Conversacion.name) private conversacionModel: Model<ConversacionDocument>,
+    @InjectModel(Mensaje.name) private mensajeModel: Model<MensajeDocument>,
+  ) { }
+
+  // Convierte lo que devuelve Mongo (con _id) en el objeto que devolvemos (con id en texto).
+  private formatearConversacion(c: ConversacionDocument): Conversation {
+    return { id: c._id.toString(), userId: c.userId, otherUserId: c.otherUserId };
   }
-  createConversation(dto: CreateConversationDTO): Conversation{
-    const conversation: Conversation = {
-      id: `${this.conversations.length + 1}`,
-      userId: dto.currentUserId ?? '1',
-      otherUserId: dto.userId,
-    };
-    this.conversations.push(conversation);
-    return conversation;
+
+  private formatearMensaje(m: MensajeDocument): Message {
+    return { id: m._id.toString(), conversationId: m.conversationId, senderId: m.senderId, content: m.content };
   }
-  sendMessage(conversationId: string, dto: CreateMessageDTO): Message {
-    const conversation = this.conversations.find(
-      (c) => c.id === conversationId,
-    );
-    if (conversation === undefined) {
+
+  // Los id de Mongo son texto de 24 caracteres hexadecimales. Si llega otro formato, lo descartamos antes de preguntarle a Mongo.
+  private idValido(id: string): boolean {
+    return /^[a-f\d]{24}$/i.test(id);
+  }
+
+  // Revisa que la conversacion exista. Si no, lanza el 404.
+  private async verificarConversacion(conversationId: string): Promise<void> {
+    const conversation = this.idValido(conversationId)
+      ? await this.conversacionModel.findById(conversationId)
+      : null;
+
+    if (conversation === null) {
       throw new NotFoundException('Conversación no encontrada');
     }
-    const message: Message = {
-      id: `${this.messages.length + 1}`,
+  }
+
+  async getConversations(): Promise<Array<Conversation>> {
+    const conversations = await this.conversacionModel.find();
+    return conversations.map(c => this.formatearConversacion(c));
+  }
+
+  async createConversation(dto: CreateConversationDTO): Promise<Conversation> {
+    const conversation = await this.conversacionModel.create({
+      userId: dto.userId,
+      otherUserId: dto.otherUserId,
+    });
+    return this.formatearConversacion(conversation);
+  }
+
+  async sendMessage(conversationId: string, dto: CreateMessageDTO): Promise<Message> {
+    await this.verificarConversacion(conversationId);
+
+    const message = await this.mensajeModel.create({
       conversationId: conversationId,
       senderId: dto.senderId,
       content: dto.content,
-    };
-    this.messages.push(message);
-    return message;
+    });
+    return this.formatearMensaje(message);
   }
-  getMessages(
+
+  async getMessages(
     conversationId: string,
     page: number = 1,
     limit: number = 10,
-  ): Array<Message> {
-    const conversation = this.conversations.find((c) => c.id === conversationId,);
-    if (conversation == undefined) {
-      throw new NotFoundException('Conversación no encontrada');
-    }
-    const conversationMessages = this.messages.filter((m) => m.conversationId === conversationId);
+  ): Promise<Array<Message>> {
+    await this.verificarConversacion(conversationId);
+
     const start = (page - 1) * limit;
-    return conversationMessages.slice(start, start + limit);
+    const messages = await this.mensajeModel
+      .find({ conversationId: conversationId })
+      .sort({ _id: 1 }) // del mas viejo al mas nuevo
+      .skip(start)
+      .limit(limit);
+
+    return messages.map(m => this.formatearMensaje(m));
   }
-  deleteMessage(messageId: string): void {
-    const index = this.messages.findIndex((m) => m.id === messageId);
-    if (index === -1) {
+
+  async deleteMessage(messageId: string): Promise<void> {
+    const eliminado = this.idValido(messageId)
+      ? await this.mensajeModel.findByIdAndDelete(messageId)
+      : null;
+
+    if (eliminado === null) {
       throw new NotFoundException('Mensaje no encontrado');
     }
-    this.messages.splice(index, 1);
   }
 }

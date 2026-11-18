@@ -1,35 +1,26 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import type { Model } from 'mongoose';
+import { NotificationRecord } from './notification.schema.js';
+import type { NotificationDocument } from './notification.schema.js';
 
-export interface Notification{
-  id: string;
-  userId: string,
-  message: string;
-  read: boolean;
-}
+export interface Notification { id: string; userId: string; message: string; read: boolean; }
+
 @Injectable()
-  export class NotificationService{
-    private notifications: Array<Notification> = [
-      { id: '1', userId: '1', message: 'Tienes un nuevo match', read: false },
-      { id: '2', userId: '1', message: 'Evento cerca de ti', read: false },
-      { id: '3', userId: '1', message: 'Asistencia confirmada', read: false },
-    ];
-  getNotifications(
-    page: number = 1,
-    limit: number = 10,
-    unreadOnly: boolean = false,
-  ): Array<Notification> {
-    let result = this.notifications;
-    if (unreadOnly) {
-      result = result.filter((n) => n.read === false)
-    }
-    const start = (page - 1) * limit;
-    return result.slice(start, start + limit);
+export class NotificationService {
+  constructor(@InjectModel(NotificationRecord.name) private readonly notificationModel: Model<NotificationDocument>) {}
+  private format(notification: NotificationDocument): Notification {
+    return { id: notification._id.toString(), userId: notification.userId, message: notification.message, read: notification.read };
   }
-  markNotificationRead(notificationId: string): void {
-    const notification = this.notifications.find((n) => n.id === notificationId);
-    if (notification === undefined) {
-      throw new NotFoundException('Notificacion no encontrada');
-    }
-    notification.read = true;
+  async getNotifications(page = 1, limit = 10, unreadOnly = false): Promise<Notification[]> {
+    const query = unreadOnly ? { read: false } : {};
+    const notifications = await this.notificationModel.find(query).sort({ _id: -1 }).skip((page - 1) * limit).limit(limit);
+    return notifications.map(notification => this.format(notification));
+  }
+  async markNotificationRead(notificationId: string): Promise<void> {
+    const notification = /^[a-f\d]{24}$/i.test(notificationId)
+      ? await this.notificationModel.findByIdAndUpdate(notificationId, { read: true })
+      : null;
+    if (!notification) throw new NotFoundException('Notificacion no encontrada');
   }
 }

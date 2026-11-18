@@ -8,9 +8,17 @@ import { PostsModule } from './posts/posts.module.js';
 import { EventsModule } from './events/events.module.js';
 import { NotificationModule } from './notifications/notifications.module.js';
 import { MatchModule } from './matches/matches.module.js';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 
 @Module({
-  imports: [UserModule, MessageModule, CancionModule, NotificationModule, MatchModule, EventsModule, PostsModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }),
+MongooseModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    uri: config.get<string>('MONGODB_URI'),
+  }),
+}), UserModule, MessageModule, CancionModule, NotificationModule, MatchModule, EventsModule, PostsModule],
   controllers: [AppController],
   providers: [AppService],
 })

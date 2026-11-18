@@ -1,74 +1,37 @@
 import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import type { Model } from 'mongoose';
 import { UserService } from '../users/users.service.js';
+import { Publicacion } from './post.schema.js';
+import type { PublicacionDocument } from './post.schema.js';
 import { PostDTO } from './dto/create-post-item.js';
 import { UpdatePostDTO } from './dto/update-post-item.dto.js';
 
-export interface Post {
-  id: string;
-  userId: string;
-  contenido: string;
-  fecha: string;
-}
-
-export interface ServerResponse {
-  data: Array<Post>;
-  message: string;
-  status: number;
-}
+export interface Post { id: string; userId: string; contenido: string; fecha: string; }
+export interface ServerResponse { data: Post[]; message: string; status: number; }
 
 @Injectable()
 export class PostsService {
-  private posts: Array<Post> = [];
-  private newId: number = 1;
+  constructor(private readonly userService: UserService, @InjectModel(Publicacion.name) private readonly postModel: Model<PublicacionDocument>) {}
+  private format(post: PublicacionDocument): Post { return { id: post._id.toString(), userId: post.userId, contenido: post.contenido, fecha: post.fecha }; }
+  private async all(): Promise<Post[]> { return (await this.postModel.find()).map(post => this.format(post)); }
 
-  constructor(private readonly userService: UserService) {}
-
-  createPost(postDTO: PostDTO): ServerResponse {
-    if (this.userService.getUser(postDTO.userId).status === 404) {
-      return { data: this.posts, status: 404, message: 'Usuario no encontrado...' };
-    }
-    const post: Post = {
-      id: String(this.newId++),
-      userId: postDTO.userId,
-      contenido: postDTO.contenido,
-      fecha: postDTO.fecha,
-    };
-    this.posts.push(post);
-    return { data: this.posts, status: 201, message: 'Publicacion creada!' };
+  async createPost(dto: PostDTO): Promise<ServerResponse> {
+    if ((await this.userService.getUser(dto.userId)).status === 404) return { data: await this.all(), status: 404, message: 'Usuario no encontrado...' };
+    const post = await this.postModel.create(dto);
+    return { data: [this.format(post)], status: 201, message: 'Publicacion creada!' };
   }
-
-  getPosts(): ServerResponse {
-    return { data: this.posts, status: 200, message: 'Publicaciones encontradas!' };
+  async getPosts(): Promise<ServerResponse> { return { data: await this.all(), status: 200, message: 'Publicaciones encontradas!' }; }
+  async getPost(id: string): Promise<ServerResponse> {
+    const post = /^[a-f\d]{24}$/i.test(id) ? await this.postModel.findById(id) : null;
+    return post ? { data: [this.format(post)], status: 200, message: 'Publicacion encontrada!' } : { data: [], status: 404, message: 'Publicacion no encontrada...' };
   }
-
-  getPost(id: string): ServerResponse {
-    const post = this.posts.find((item) => item.id === id);
-    return post
-      ? { data: [post], status: 200, message: 'Publicacion encontrada!' }
-      : { data: [], status: 404, message: 'Publicacion no encontrada...' };
+  async editPost(id: string, dto: UpdatePostDTO): Promise<ServerResponse> {
+    const post = /^[a-f\d]{24}$/i.test(id) ? await this.postModel.findByIdAndUpdate(id, dto, { new: true }) : null;
+    return post ? { data: [this.format(post)], status: 200, message: 'Publicacion editada correctamente!' } : { data: [], status: 404, message: 'Publicacion no encontrada...' };
   }
-
-  editPost(id: string, updatePostDTO: UpdatePostDTO): ServerResponse {
-    const idx = this.posts.findIndex((item) => item.id === id);
-    if (idx !== -1) {
-      this.posts[idx] = {
-        ...this.posts[idx],
-        contenido: updatePostDTO.contenido ?? this.posts[idx].contenido,
-        fecha: updatePostDTO.fecha ?? this.posts[idx].fecha,
-        id: this.posts[idx].id,
-        userId: this.posts[idx].userId,
-      };
-    }
-    const status = idx !== -1 ? 200 : 404;
-    const message = status === 200 ? 'Publicacion editada correctamente!' : 'Publicacion no encontrada...';
-    return { data: this.posts, status, message };
-  }
-
-  deletePost(id: string): ServerResponse {
-    const idx = this.posts.findIndex((item) => item.id === id);
-    if (idx !== -1) this.posts.splice(idx, 1);
-    const status = idx !== -1 ? 200 : 404;
-    const message = status === 200 ? 'Publicacion eliminada correctamente!' : 'Publicacion no encontrada...';
-    return { data: this.posts, status, message };
+  async deletePost(id: string): Promise<ServerResponse> {
+    const post = /^[a-f\d]{24}$/i.test(id) ? await this.postModel.findByIdAndDelete(id) : null;
+    return post ? { data: [this.format(post)], status: 200, message: 'Publicacion eliminada correctamente!' } : { data: [], status: 404, message: 'Publicacion no encontrada...' };
   }
 }

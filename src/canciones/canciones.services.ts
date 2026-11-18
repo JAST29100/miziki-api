@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import type { Model } from 'mongoose';
+import { Cancion } from './cancion.schema.js';
+import type { CancionDocument } from './cancion.schema.js';
 import { CancionDTO } from './dto/create-cancion.dto.js';
 import { UpdateCancionDTO } from './dto/update-cancion.dto.js';
 
 //Moldes
-export interface Cancion { //Estructura de cada cancion.
+export interface CancionRespuesta { //Estructura de cada cancion que se devuelve al cliente (con id en vez de _id).
   id: string;
   titulo: string;
   artista: string;
@@ -12,78 +16,82 @@ export interface Cancion { //Estructura de cada cancion.
   duracion: number;
 }
 
-export interface ServerResponse {//define la forma que tiene toda respuesta que devuelve al service.
-  data: Array<Cancion>; //la lista de canciones de la respuesta.
+export interface ServerResponse {//define la forma que tiene toda respuesta que devuelve el service.
+  data: Array<CancionRespuesta>; //la lista de canciones de la respuesta.
   message: string; //"Cancion creada" o "Cancion no encontrada".
-  status: number; //codigo resultado como 200 o 400.
+  status: number; //codigo resultado como 200 o 404.
 }
 
 @Injectable() //Esta clase puede ser inyectada en otras.
 export class CancionService {
-    private canciones: Array<Cancion> = []; //Se crea el array donde se van a guardar todas las canciones.
-    private nextId: number = 1; // contador para los id (1, 2, 3...).
+    constructor(@InjectModel(Cancion.name) private cancionModel: Model<CancionDocument>) { } //Nest nos da el modelo de Mongo para hablar con la coleccion de canciones.
 
-    /* CREATE */ 
-    createCancion(cancionDTO: CancionDTO): ServerResponse { //recibe una variable llamada cancionDTO y debe tener la forma de CancionDTO
-        const nuevaCancion: Cancion = { id: String(this.nextId), ...cancionDTO }; //transforma el numero en texto y cancionDTO copia dentro del objeto todos los atributos que dio el cliente.
-        this.nextId++; //Agrego 1 al id para la siguiente cancion
-        this.canciones.push(nuevaCancion); //Mete el objeto que se acaba de crear a la lista canciones
+    //Convierte la cancion de Mongo (que trae _id) en el objeto que devolvemos (con id en texto).
+    private formatear(c: CancionDocument): CancionRespuesta {
+        return { id: c._id.toString(), titulo: c.titulo, artista: c.artista, album: c.album, genero: c.genero, duracion: c.duracion };
+    }
 
-        return { data: [nuevaCancion], status: 200, message: "Canción creada" }; //un arreglo con la cancion recien creada,codigo de exito,texto para mostrar.
+    //Los id de Mongo son texto de 24 caracteres hexadecimales. Si llega otro formato, Mongo da error, asi que lo revisamos antes.
+    private idValido(id: string): boolean {
+        return /^[a-f\d]{24}$/i.test(id);
+    }
+
+    /* CREATE */
+    async createCancion(cancionDTO: CancionDTO): Promise<ServerResponse> { //async porque hablar con Mongo toma tiempo, devuelve una promesa.
+        const nueva = await this.cancionModel.create(cancionDTO); //Guarda la cancion en Mongo, y Mongo le asigna el _id solo.
+
+        return { data: [this.formatear(nueva)], status: 200, message: "Canción creada" };
     }
 
     /* Read */
-    getCanciones(): ServerResponse { //para ver si existen canciones
-        const status = this.canciones.length > 0 ? 200 : 404; //Se guarda 200 si hay canciones o 404 si no hay canciones en la variable status
-        const message = status === 200 ? "Canciones encontradas!" : "Canciones no encontradas..."; //Si hay canciones manda exito, si no dice que no hay
+    async getCanciones(): Promise<ServerResponse> {
+        const canciones = await this.cancionModel.find(); //Trae todas las canciones de la coleccion.
 
-        return { data: this.canciones, status, message };
+        const status = canciones.length > 0 ? 200 : 404; //200 si hay canciones o 404 si no hay.
+        const message = status === 200 ? "Canciones encontradas" : "Canciones no encontradas";
+
+        return { data: canciones.map(c => this.formatear(c)), status, message }; //map convierte cada cancion de Mongo al formato con id.
     }
 
-    getCancion(id: string): ServerResponse {
-        const cancion: Cancion | undefined = this.canciones.find(i => (i.id === id)); //Recorre el array canciones y por cada cancion (i), pregunta si su id es igual al id que piden. Se queda con la primera que cumple si no undefined.
+    async getCancion(id: string): Promise<ServerResponse> {
+        const cancion = this.idValido(id) ? await this.cancionModel.findById(id) : null; //Si el id tiene formato raro ni siquiera busca. Si no la encuentra devuelve null.
 
-        const status = cancion !== undefined ? 200 : 404; //Si cancion es diferente a undefined devuelve 200 (lo encontro), sino 404 (no lo encontro).
-        const message = status === 200 ? "Cancion encontrada" : "Cancion no encontrada"; //si status igual a 200 encontrada, si no no encontrada.
+        if (cancion === null) {
+            return { data: [], status: 404, message: "Cancion no encontrada" };
+        }
 
-        return { data: cancion !== undefined ? [cancion] : [], status, message }; //Si existe la cancion devuelve la cancion en un array, si no la encuentra devuelve un array vacio, con status y mensaje.
+        return { data: [this.formatear(cancion)], status: 200, message: "Cancion encontrada" };
     }
 
     /* Update */
-    updateParteCancion(id: string, updateCancionDTO: UpdateCancionDTO): ServerResponse {
-        const idx: number = this.canciones.findIndex(i => (i.id === id)); //Busca la cancion y devuelve el valor de indice, si no lo encuentra devuelve -1.
+    async updateParteCancion(id: string, updateCancionDTO: UpdateCancionDTO): Promise<ServerResponse> {
+        const cancion = this.idValido(id) ? await this.cancionModel.findByIdAndUpdate(id, updateCancionDTO, { new: true }) : null; //Busca y cambia solo los campos que vengan. new: true hace que devuelva la cancion ya actualizada.
 
-        if (idx === -1) {
-        return { data: [], status: 404, message: "Cancion no encontrada..." }; //Si idx es -1, devuelve array vacio, status y mensaje.
+        if (cancion === null) {
+            return { data: [], status: 404, message: "Cancion no encontrada..." };
         }
 
-        this.canciones[idx] = { ...this.canciones[idx], ...updateCancionDTO, id }; //Pasa la cancion y todos los campos que vengan en el update y los campos que no vengan se quedan como estaban.
-
-        return { data: [this.canciones[idx]], status: 200, message: "Cancion actualizada correctamente" }; //Devuelve la cancion de la lista ya actualizada, status y mensaje.
+        return { data: [this.formatear(cancion)], status: 200, message: "Cancion actualizada correctamente" };
     }
 
-    updateCancion(id: string, cancionDTO: CancionDTO): ServerResponse {
-        const idx: number = this.canciones.findIndex(i => (i.id === id)); //Busca la cancion en canciones y devuelve el indice, si no la encuentra -1.
+    async updateCancion(id: string, cancionDTO: CancionDTO): Promise<ServerResponse> {
+        const cancion = this.idValido(id) ? await this.cancionModel.findOneAndReplace({ _id: id }, cancionDTO, { new: true }) : null; //Reemplaza toda la cancion por la nueva, el _id queda igual.
 
-        if (idx === -1) {
-        return { data: [], status: 404, message: "Cancion no encontrada..." }; //Si no la encuentra, manda array vacio, satus y mensaje
+        if (cancion === null) {
+            return { data: [], status: 404, message: "Cancion no encontrada..." };
         }
 
-        this.canciones[idx] = { id, ...cancionDTO }; //El id queda igual y se reemplaza toda la info de la cancion por una nueva.
-
-        return { data: [this.canciones[idx]], status: 200, message: "Canción actualizada correctamente!" }; //Mete la cancion actualizada a la lista, manda satatus y mensaje.
+        return { data: [this.formatear(cancion)], status: 200, message: "Canción actualizada correctamente!" };
     }
 
     /* Delete */
-    deleteCancion(id: string): ServerResponse {
-        const idx: number = this.canciones.findIndex(i => (i.id === id)); //Busca la cancion por id y devuelve el indice.
+    async deleteCancion(id: string): Promise<ServerResponse> {
+        const eliminada = this.idValido(id) ? await this.cancionModel.findByIdAndDelete(id) : null; //Borra la cancion y devuelve la que borro (o null si no existia).
 
-        if (idx === -1) {
-        return { data: [], status: 404, message: "Cancion no encontrada..." }; //Si no la encuentra manda array vacio, status y mensaje.
+        if (eliminada === null) {
+            return { data: [], status: 404, message: "Cancion no encontrada..." };
         }
 
-        const [eliminada] = this.canciones.splice(idx, 1); // Se borra la cancion seleccionada de la lista y se gurda sola sin array gracias a los corchetes en la variable eliminada.
-
-        return { data: [eliminada], status: 200, message: "Cancion eliminada" }; //Devuelve la cancion eliminada para confirmar, status y mensaje.
+        return { data: [this.formatear(eliminada)], status: 200, message: "Cancion eliminada" };
     }
 }

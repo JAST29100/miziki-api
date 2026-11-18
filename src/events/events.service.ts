@@ -1,107 +1,66 @@
 import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import type { Model } from 'mongoose';
 import { UserService } from '../users/users.service.js';
+import { Evento } from './event.schema.js';
+import type { EventoDocument } from './event.schema.js';
 import { CreateEventDTO } from './dto/create-event.dto.js';
 import { UpdateEventDTO } from './dto/update-event.dto.js';
 
-export interface Event {
-  id: string;
-  userId: string;
-  titulo: string;
-  descripcion: string;
-  fecha: string;
-  asistentes: Array<string>;
-}
-
-export interface ServerResponse {
-  data: Array<Event>;
-  message: string;
-  status: number;
-}
+export interface Event { id: string; userId: string; titulo: string; descripcion: string; fecha: string; asistentes: string[]; }
+export interface ServerResponse { data: Event[]; message: string; status: number; }
 
 @Injectable()
 export class EventsService {
-  private events: Array<Event> = [];
-  private newId: number = 1;
+  constructor(private readonly userService: UserService, @InjectModel(Evento.name) private readonly eventModel: Model<EventoDocument>) {}
 
-  constructor(private readonly userService: UserService) {}
-
-  createEvent(eventDTO: CreateEventDTO): ServerResponse {
-    if (this.userService.getUser(eventDTO.userId).status === 404) {
-      return { data: this.events, status: 404, message: 'Usuario no encontrado...' };
-    }
-    const event: Event = {
-      id: String(this.newId++),
-      userId: eventDTO.userId,
-      titulo: eventDTO.titulo,
-      descripcion: eventDTO.descripcion,
-      fecha: eventDTO.fecha,
-      asistentes: [],
-    };
-    this.events.push(event);
-    return { data: this.events, status: 201, message: 'Evento creado!' };
+  private format(event: EventoDocument): Event {
+    return { id: event._id.toString(), userId: event.userId, titulo: event.titulo, descripcion: event.descripcion, fecha: event.fecha, asistentes: [...event.asistentes] };
   }
 
-  getEvents(): ServerResponse {
-    return { data: this.events, status: 200, message: 'Eventos encontrados!' };
+  private async all(): Promise<Event[]> { return (await this.eventModel.find()).map(event => this.format(event)); }
+
+  async createEvent(dto: CreateEventDTO): Promise<ServerResponse> {
+    if ((await this.userService.getUser(dto.userId)).status === 404) return { data: await this.all(), status: 404, message: 'Usuario no encontrado...' };
+    const event = await this.eventModel.create({ ...dto, asistentes: [] });
+    return { data: [this.format(event)], status: 201, message: 'Evento creado!' };
   }
 
-  getEvent(id: string): ServerResponse {
-    const event = this.events.find((item) => item.id === id);
-    return event
-      ? { data: [event], status: 200, message: 'Evento encontrado!' }
-      : { data: [], status: 404, message: 'Evento no encontrado...' };
+  async getEvents(): Promise<ServerResponse> { return { data: await this.all(), status: 200, message: 'Eventos encontrados!' }; }
+
+  async getEvent(id: string): Promise<ServerResponse> {
+    const event = /^[a-f\d]{24}$/i.test(id) ? await this.eventModel.findById(id) : null;
+    return event ? { data: [this.format(event)], status: 200, message: 'Evento encontrado!' } : { data: [], status: 404, message: 'Evento no encontrado...' };
   }
 
-  updateEvent(id: string, eventDTO: UpdateEventDTO): ServerResponse {
-    const idx = this.events.findIndex((item) => item.id === id);
-    if (idx !== -1) {
-      this.events[idx] = {
-        ...this.events[idx],
-        titulo: eventDTO.titulo ?? this.events[idx].titulo,
-        descripcion: eventDTO.descripcion ?? this.events[idx].descripcion,
-        fecha: eventDTO.fecha ?? this.events[idx].fecha,
-        id: this.events[idx].id,
-        userId: this.events[idx].userId,
-        asistentes: this.events[idx].asistentes,
-      };
-    }
-    const status = idx !== -1 ? 200 : 404;
-    const message = status === 200 ? 'Evento actualizado!' : 'Evento no encontrado...';
-    return { data: this.events, status, message };
+  async updateEvent(id: string, dto: UpdateEventDTO): Promise<ServerResponse> {
+    const event = /^[a-f\d]{24}$/i.test(id) ? await this.eventModel.findByIdAndUpdate(id, dto, { new: true }) : null;
+    return event ? { data: [this.format(event)], status: 200, message: 'Evento actualizado!' } : { data: [], status: 404, message: 'Evento no encontrado...' };
   }
 
-  attendEvent(id: string, userId: string): ServerResponse {
-    const event = this.events.find((item) => item.id === id);
-    if (!event) return { data: this.events, status: 404, message: 'Evento no encontrado...' };
-    if (this.userService.getUser(userId).status === 404) {
-      return { data: this.events, status: 404, message: 'Usuario no encontrado...' };
-    }
-    if (event.asistentes.includes(userId)) {
-      return { data: this.events, status: 409, message: 'El usuario ya está inscrito...' };
-    }
+  async attendEvent(id: string, userId: string): Promise<ServerResponse> {
+    const event = /^[a-f\d]{24}$/i.test(id) ? await this.eventModel.findById(id) : null;
+    if (!event) return { data: [], status: 404, message: 'Evento no encontrado...' };
+    if ((await this.userService.getUser(userId)).status === 404) return { data: [], status: 404, message: 'Usuario no encontrado...' };
+    if (event.asistentes.includes(userId)) return { data: [this.format(event)], status: 409, message: 'El usuario ya está inscrito...' };
     event.asistentes.push(userId);
-    return { data: this.events, status: 201, message: 'Asistencia registrada!' };
+    await event.save();
+    return { data: [this.format(event)], status: 201, message: 'Asistencia registrada!' };
   }
 
-  cancelAttendance(id: string, userId: string): ServerResponse {
-    const event = this.events.find((item) => item.id === id);
-    if (!event) return { data: this.events, status: 404, message: 'Evento no encontrado...' };
-    if (this.userService.getUser(userId).status === 404) {
-      return { data: this.events, status: 404, message: 'Usuario no encontrado...' };
-    }
-    const attendeeIndex = event.asistentes.indexOf(userId);
-    if (attendeeIndex === -1) {
-      return { data: this.events, status: 409, message: 'El usuario no está inscrito...' };
-    }
-    event.asistentes.splice(attendeeIndex, 1);
-    return { data: this.events, status: 200, message: 'Asistencia cancelada!' };
+  async cancelAttendance(id: string, userId: string): Promise<ServerResponse> {
+    const event = /^[a-f\d]{24}$/i.test(id) ? await this.eventModel.findById(id) : null;
+    if (!event) return { data: [], status: 404, message: 'Evento no encontrado...' };
+    if ((await this.userService.getUser(userId)).status === 404) return { data: [this.format(event)], status: 404, message: 'Usuario no encontrado...' };
+    const index = event.asistentes.indexOf(userId);
+    if (index < 0) return { data: [this.format(event)], status: 409, message: 'El usuario no está inscrito...' };
+    event.asistentes.splice(index, 1);
+    await event.save();
+    return { data: [this.format(event)], status: 200, message: 'Asistencia cancelada!' };
   }
 
-  deleteEvent(id: string): ServerResponse {
-    const idx = this.events.findIndex((item) => item.id === id);
-    if (idx !== -1) this.events.splice(idx, 1);
-    const status = idx !== -1 ? 200 : 404;
-    const message = status === 200 ? 'Evento eliminado!' : 'Evento no encontrado...';
-    return { data: this.events, status, message };
+  async deleteEvent(id: string): Promise<ServerResponse> {
+    const event = /^[a-f\d]{24}$/i.test(id) ? await this.eventModel.findByIdAndDelete(id) : null;
+    return event ? { data: [this.format(event)], status: 200, message: 'Evento eliminado!' } : { data: [], status: 404, message: 'Evento no encontrado...' };
   }
 }

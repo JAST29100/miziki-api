@@ -8,19 +8,19 @@ export class PostsController {
   constructor(private readonly postService: PostsService) {}
 
   @Get()
-  getPosts(): ServerResponse { return this.postService.getPosts(); }
+  getPosts(): Promise<ServerResponse> { return this.postService.getPosts(); }
 
   @Post()
-  createPost(@Body() postDTO: PostDTO): ServerResponse { return this.postService.createPost(postDTO); }
+    createPost(@Body() postDTO: PostDTO): Promise<ServerResponse> { return this.postService.createPost(postDTO); }
 
   @Get(':id')
-  getPost(@Param('id') id: string): ServerResponse { return this.postService.getPost(id); }
+  getPost(@Param('id') id: string): Promise<ServerResponse> { return this.postService.getPost(id); }
 
   @Patch(':id')
-  updatePost(@Param('id') id: string, @Body() updatePostDTO: UpdatePostDTO): ServerResponse {
+  updatePost(@Param('id') id: string, @Body() updatePostDTO: UpdatePostDTO): Promise<ServerResponse> {
     return this.postService.editPost(id, updatePostDTO);
   }
 
   @Delete(':id')
-  deletePost(@Param('id') id: string): ServerResponse { return this.postService.deletePost(id); }
+  deletePost(@Param('id') id: string): Promise<ServerResponse> { return this.postService.deletePost(id); }
 }

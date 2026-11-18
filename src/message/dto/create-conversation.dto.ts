@@ -1,4 +1,4 @@
 export class CreateConversationDTO {
-  currentUserId?: string;
-  userId!: string;
+  userId!: string; // quien crea la conversacion
+  otherUserId!: string; // con quien conversa
 }

@@ -9,29 +9,29 @@ export class EventsController {
   constructor(private readonly eventService: EventsService) {}
 
   @Get()
-  getEvents(): ServerResponse { return this.eventService.getEvents(); }
+  getEvents(): Promise<ServerResponse> { return this.eventService.getEvents(); }
 
   @Post()
-  createEvent(@Body() eventDTO: CreateEventDTO): ServerResponse { return this.eventService.createEvent(eventDTO); }
+  createEvent(@Body() eventDTO: CreateEventDTO): Promise<ServerResponse> { return this.eventService.createEvent(eventDTO); }
 
   @Get(':id')
-  getEvent(@Param('id') id: string): ServerResponse { return this.eventService.getEvent(id); }
+  getEvent(@Param('id') id: string): Promise<ServerResponse> { return this.eventService.getEvent(id); }
 
   @Patch(':id')
-  updateEvent(@Param('id') id: string, @Body() eventDTO: UpdateEventDTO): ServerResponse {
+  updateEvent(@Param('id') id: string, @Body() eventDTO: UpdateEventDTO): Promise<ServerResponse> {
     return this.eventService.updateEvent(id, eventDTO);
   }
 
   @Post(':id/attend')
-  attendEvent(@Param('id') id: string, @Body() dto: AttendEventDTO): ServerResponse {
+  attendEvent(@Param('id') id: string, @Body() dto: AttendEventDTO): Promise<ServerResponse> {
     return this.eventService.attendEvent(id, dto.userId);
   }
 
   @Delete(':id/attend')
-  cancelAttendance(@Param('id') id: string, @Body() dto: AttendEventDTO): ServerResponse {
+  cancelAttendance(@Param('id') id: string, @Body() dto: AttendEventDTO): Promise<ServerResponse> {
     return this.eventService.cancelAttendance(id, dto.userId);
   }
 
   @Delete(':id')
-  deleteEvent(@Param('id') id: string): ServerResponse { return this.eventService.deleteEvent(id); }
+  deleteEvent(@Param('id') id: string): Promise<ServerResponse> { return this.eventService.deleteEvent(id); }
 }
