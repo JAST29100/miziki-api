@@ -12,6 +12,10 @@ export class NotificationService {
   private format(notification: NotificationDocument): Notification {
     return { id: notification._id.toString(), userId: notification.userId, message: notification.message, read: notification.read };
   }
+  async createNotification(userId: string, message: string): Promise<Notification> {
+    const notification = await this.notificationModel.create({ userId, message, read: false });
+    return this.format(notification);
+  }
   async getNotifications(page = 1, limit = 10, unreadOnly = false): Promise<Notification[]> {
     const query = unreadOnly ? { read: false } : {};
     const notifications = await this.notificationModel.find(query).sort({ _id: -1 }).skip((page - 1) * limit).limit(limit);

@@ -5,6 +5,7 @@ import { UserService } from '../users/users.service.js';
 import type { User } from '../users/users.service.js';
 import { LikeRecord, MatchRecord, RejectionRecord } from './match.schema.js';
 import type { LikeDocument, MatchDocument, RejectionDocument } from './match.schema.js';
+import { NotificationService } from '../notifications/notifications.service.js';
 
 export interface Match { id: string; usuariosMatch: string[]; }
 export interface ServerResponse { data: Array<User | Match>; message: string; status: number; }
@@ -16,6 +17,7 @@ export class MatchService {
     @InjectModel(LikeRecord.name) private readonly likeModel: Model<LikeDocument>,
     @InjectModel(RejectionRecord.name) private readonly rejectionModel: Model<RejectionDocument>,
     @InjectModel(MatchRecord.name) private readonly matchModel: Model<MatchDocument>,
+    private readonly notificationService: NotificationService,
   ) {}
   private format(match: MatchDocument): Match { return { id: match._id.toString(), usuariosMatch: [...match.usuariosMatch] }; }
   private async exists(id: string): Promise<boolean> { return (await this.userService.getUser(id)).status === 200; }
@@ -31,6 +33,10 @@ export class MatchService {
     await this.likeModel.create({ de: myId, para: otherId });
     if (await this.likeModel.exists({ de: otherId, para: myId })) {
       const match = await this.matchModel.create({ usuariosMatch: [myId, otherId] });
+      await Promise.all([
+        this.notificationService.createNotification(myId, `Tienes un nuevo match con ${otherId}.`),
+        this.notificationService.createNotification(otherId, `Tienes un nuevo match con ${myId}.`),
+      ]);
       return { data: [this.format(match)], status: 201, message: 'Like registrado. Es un match' };
     }
     return { data: [], status: 201, message: 'Like registrado' };

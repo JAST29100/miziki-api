@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
 import { Conversacion, Mensaje } from './message.schema.js';
 import type { ConversacionDocument, MensajeDocument } from './message.schema.js';
+import { NotificationService } from '../notifications/notifications.service.js';
 import { CreateConversationDTO } from './dto/create-conversation.dto.js';
 import { CreateMessageDTO } from './dto/create-message.dto.js';
 
@@ -23,6 +24,7 @@ export class MessageService {
   constructor(
     @InjectModel(Conversacion.name) private conversacionModel: Model<ConversacionDocument>,
     @InjectModel(Mensaje.name) private mensajeModel: Model<MensajeDocument>,
+    private readonly notificationService: NotificationService,
   ) { }
 
   // Convierte lo que devuelve Mongo (con _id) en el objeto que devolvemos (con id en texto).
@@ -40,7 +42,7 @@ export class MessageService {
   }
 
   // Revisa que la conversacion exista. Si no, lanza el 404.
-  private async verificarConversacion(conversationId: string): Promise<void> {
+  private async verificarConversacion(conversationId: string): Promise<ConversacionDocument> {
     const conversation = this.idValido(conversationId)
       ? await this.conversacionModel.findById(conversationId)
       : null;
@@ -48,6 +50,7 @@ export class MessageService {
     if (conversation === null) {
       throw new NotFoundException('Conversación no encontrada');
     }
+    return conversation;
   }
 
   async getConversations(): Promise<Array<Conversation>> {
@@ -64,13 +67,20 @@ export class MessageService {
   }
 
   async sendMessage(conversationId: string, dto: CreateMessageDTO): Promise<Message> {
-    await this.verificarConversacion(conversationId);
+    const conversation = await this.verificarConversacion(conversationId);
 
     const message = await this.mensajeModel.create({
       conversationId: conversationId,
       senderId: dto.senderId,
       content: dto.content,
     });
+    const recipientId = dto.senderId === conversation.userId
+      ? conversation.otherUserId
+      : conversation.userId;
+    await this.notificationService.createNotification(
+      recipientId,
+      `Tienes un nuevo mensaje de ${dto.senderId}.`,
+    );
     return this.formatearMensaje(message);
   }
 
